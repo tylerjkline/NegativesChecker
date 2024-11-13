@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <cmath>
-
+#include <regex>
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "Shlwapi.lib")
@@ -123,7 +123,7 @@ void InitializeGUI(HWND hwnd, AppData* pAppData) {
 
     HWND hGroupBoxFile = CreateWindow(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 15, 5, 760, 130, hwnd, NULL, NULL, NULL);
     SendMessage(hGroupBoxFile, WM_SETFONT, (WPARAM)pAppData->hBoldFont, TRUE);
-    HWND hLabelTitle = CreateWindow(L"STATIC", L"Negatives Tool | Version 1.0 | Build 00019 11/13", WS_CHILD | WS_VISIBLE, 25, 15, 740, 25, hwnd, (HMENU)ID_LABEL_TITLE, NULL, NULL);
+    HWND hLabelTitle = CreateWindow(L"STATIC", L"Negatives Tool | Version 1.0 | Build 00021 11/14", WS_CHILD | WS_VISIBLE, 25, 15, 740, 25, hwnd, (HMENU)ID_LABEL_TITLE, NULL, NULL);
     SendMessage(hLabelTitle, WM_SETFONT, (WPARAM)pAppData->hFont, TRUE);
     HWND hLabelSuggested = CreateWindow(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 25, 45, 740, 40, hwnd, (HMENU)ID_LABEL_SUGGESTED, NULL, NULL);
     SendMessage(hLabelSuggested, WM_SETFONT, (WPARAM)pAppData->hFont, TRUE);
@@ -256,34 +256,85 @@ void ClearListView(HWND hListView) {
     ListView_DeleteAllItems(hListView);
 }
 
+#include <windows.h>
+#include <string>
+using namespace std;
+
+#define MAX_PATH_LENGTH MAX_PATH
+
+#include <windows.h>
+#include <string>
+#include <regex>
+using namespace std;
+
+#define MAX_PATH_LENGTH MAX_PATH
+
+#include <windows.h>
+#include <string>
+#include <regex>
+using namespace std;
+
+#define MAX_PATH_LENGTH MAX_PATH
+
+#include <windows.h>
+#include <string>
+#include <regex>
+using namespace std;
+
+#define MAX_PATH_LENGTH MAX_PATH
+
 void GetMostRecentFile(wchar_t* suggestedFile) {
-    suggestedFile[0] = L'\0'; wchar_t* userProfile = NULL; size_t len = 0;
-    if (_wdupenv_s(&userProfile, &len, L"USERPROFILE") != 0 || userProfile == NULL) return;
-    wchar_t paths[3][MAX_PATH_LENGTH]; swprintf_s(paths[0], MAX_PATH_LENGTH, L"%s\\Downloads", userProfile);
+    suggestedFile[0] = L'\0';
+
+    wchar_t* userProfile = NULL;
+    size_t len = 0;
+
+    if (_wdupenv_s(&userProfile, &len, L"USERPROFILE") != 0 || userProfile == NULL) {
+        return;
+    }
+
+    wchar_t paths[2][MAX_PATH_LENGTH];
+    swprintf_s(paths[0], MAX_PATH_LENGTH, L"%s\\Downloads", userProfile);
     swprintf_s(paths[1], MAX_PATH_LENGTH, L"%s\\Desktop", userProfile);
-    swprintf_s(paths[2], MAX_PATH_LENGTH, L"%s\\Documents", userProfile); free(userProfile);
-    WIN32_FIND_DATAW findFileData; HANDLE hFind; FILETIME latestTime = { 0 }; wstring latestFile = L"";
-    for (int i = 0; i < 3; i++) {
-        wchar_t searchPath[MAX_PATH_LENGTH]; swprintf_s(searchPath, MAX_PATH_LENGTH, L"%s\\export_*.csv", paths[i]);
-        hFind = FindFirstFileW(searchPath, &findFileData); if (hFind != INVALID_HANDLE_VALUE) {
+    free(userProfile);
+
+    WIN32_FIND_DATAW findFileData;
+    HANDLE hFind;
+    FILETIME latestTime = { 0 };
+    wstring latestFile;
+
+    // Regex pattern to match files starting with "export_" followed by date in the form YYYY-MM-DD HH_MM_SS.csv
+    wregex exportPattern(LR"(export_\d{4}-\d{2}-\d{2} \d{2}_\d{2}_\d{2}\.csv)");
+
+    for (int i = 0; i < 2; i++) {
+        wchar_t searchPath[MAX_PATH_LENGTH];
+        swprintf_s(searchPath, MAX_PATH_LENGTH, L"%s\\*.csv", paths[i]);
+
+        hFind = FindFirstFileW(searchPath, &findFileData);
+        if (hFind != INVALID_HANDLE_VALUE) {
             do {
                 if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                    FILETIME currentTime; GetSystemTimeAsFileTime(&currentTime);
-                    ULARGE_INTEGER current, fileTime; current.LowPart = currentTime.dwLowDateTime;
-                    current.HighPart = currentTime.dwHighDateTime; fileTime.LowPart = findFileData.ftLastWriteTime.dwLowDateTime;
-                    fileTime.HighPart = findFileData.ftLastWriteTime.dwHighDateTime;
-                    if (current.QuadPart < fileTime.QuadPart) continue;
-                    double diffSeconds = (double)(current.QuadPart - fileTime.QuadPart) / 10000000.0;
-                    double diffHours = diffSeconds / 3600.0; if (diffHours > 8.0) continue;
-                    if (CompareFileTime(&findFileData.ftLastWriteTime, &latestTime) > 0) {
-                        latestTime = findFileData.ftLastWriteTime; latestFile = wstring(paths[i]) + L"\\" + findFileData.cFileName;
+                    // Ensure the file matches the specific "export_" pattern
+                    if (regex_match(findFileData.cFileName, exportPattern)) {
+                        // Update if this file is the most recent
+                        if (CompareFileTime(&findFileData.ftLastWriteTime, &latestTime) > 0) {
+                            latestTime = findFileData.ftLastWriteTime;
+                            latestFile = wstring(paths[i]) + L"\\" + findFileData.cFileName;
+                        }
                     }
                 }
-            } while (FindNextFileW(hFind, &findFileData)); FindClose(hFind);
+            } while (FindNextFileW(hFind, &findFileData));
+            FindClose(hFind);
         }
     }
-    if (!latestFile.empty()) wcsncpy_s(suggestedFile, MAX_PATH_LENGTH, latestFile.c_str(), _TRUNCATE);
+
+    if (!latestFile.empty()) {
+        wcsncpy_s(suggestedFile, MAX_PATH_LENGTH, latestFile.c_str(), _TRUNCATE);
+    }
 }
+
+
+
 
 void BrowseForFile(HWND hwnd, AppData* pAppData) {
     OPENFILENAMEW ofn = {}; wchar_t szFileName[MAX_PATH_LENGTH] = L"";
